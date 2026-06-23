@@ -7,7 +7,7 @@
 <p align="center">A floating macOS translator — summon with a hotkey, translate as you type. Rust + Tauri v2.</p>
 
 <p align="center">
-  <a href="https://x.com/DuinoDu/status/2069390449731883279">𝕏 / Twitter</a>
+  <a href="https://x.com/LovemoonRobot/status/2069400393722007735">𝕏 / Twitter</a>
   &nbsp;·&nbsp;
   <a href="http://xhslink.com/o/HbALduehJj">小红书 / Xiaohongshu</a>
 </p>
