@@ -1,33 +1,148 @@
-use tauri::{Emitter, Manager, PhysicalPosition};
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Mutex;
+
+use serde::{Deserialize, Serialize};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-/// Translate `text` into `target` (default English) using the DeepSeek chat API.
-/// Returns the translated string, or an error message shown in the UI.
+const DEFAULT_HOTKEY: &str = "CommandOrControl+Shift+T";
+const DEFAULT_BASE_URL: &str = "https://api.deepseek.com/v1";
+
+/// User-configurable settings, persisted to `settings.json` in the app config dir.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Settings {
+    #[serde(default)]
+    api_key: String,
+    #[serde(default = "default_base_url")]
+    base_url: String,
+    /// Source language, or "auto" to let the model detect it.
+    #[serde(default = "default_source")]
+    source_lang: String,
+    #[serde(default = "default_target")]
+    target_lang: String,
+    #[serde(default = "default_hotkey")]
+    hotkey: String,
+}
+
+fn default_base_url() -> String {
+    std::env::var("DEEPSEEK_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string())
+}
+fn default_source() -> String {
+    "auto".to_string()
+}
+fn default_target() -> String {
+    "English".to_string()
+}
+fn default_hotkey() -> String {
+    DEFAULT_HOTKEY.to_string()
+}
+
+impl Settings {
+    /// Initial settings seeded from environment / .env (first run only).
+    fn from_env() -> Self {
+        Settings {
+            api_key: std::env::var("DEEPSEEK_API_KEY").unwrap_or_default(),
+            base_url: default_base_url(),
+            source_lang: default_source(),
+            target_lang: default_target(),
+            hotkey: default_hotkey(),
+        }
+    }
+}
+
+struct AppState {
+    settings: Settings,
+    config_path: Option<PathBuf>,
+    translate_item: Option<MenuItem<tauri::Wry>>,
+}
+
+type SharedState = Mutex<AppState>;
+
+/// Return the current settings to the frontend.
 #[tauri::command]
-async fn translate(text: String, target: Option<String>) -> Result<String, String> {
+fn get_settings(state: State<'_, SharedState>) -> Settings {
+    state.lock().unwrap().settings.clone()
+}
+
+/// Persist new settings, re-register the global hotkey, and write to disk.
+#[tauri::command]
+fn save_settings(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+    settings: Settings,
+) -> Result<(), String> {
+    // Validate the hotkey before committing anything.
+    let shortcut: Shortcut = settings
+        .hotkey
+        .parse()
+        .map_err(|_| format!("无法识别的快捷键: {}", settings.hotkey))?;
+
+    // Re-register the global shortcut (we only ever keep one registered).
+    let gs = app.global_shortcut();
+    let _ = gs.unregister_all();
+    gs.register(shortcut)
+        .map_err(|e| format!("快捷键注册失败（可能被占用）: {e}"))?;
+
+    let mut guard = state.lock().unwrap();
+    // Keep the tray menu's displayed shortcut in sync with the new hotkey.
+    if let Some(item) = &guard.translate_item {
+        let _ = item.set_accelerator(Some(settings.hotkey.as_str()));
+    }
+    guard.settings = settings;
+    if let Some(path) = guard.config_path.clone() {
+        if let Some(dir) = path.parent() {
+            let _ = fs::create_dir_all(dir);
+        }
+        let json = serde_json::to_string_pretty(&guard.settings).map_err(|e| e.to_string())?;
+        fs::write(&path, json).map_err(|e| format!("写入配置失败: {e}"))?;
+    }
+    Ok(())
+}
+
+/// Translate `text` using the DeepSeek chat API and the saved settings.
+#[tauri::command]
+async fn translate(text: String, state: State<'_, SharedState>) -> Result<String, String> {
     let text = text.trim().to_string();
     if text.is_empty() {
         return Ok(String::new());
     }
-    let target = target.unwrap_or_else(|| "English".to_string());
 
-    let api_key = std::env::var("DEEPSEEK_API_KEY")
-        .map_err(|_| "DEEPSEEK_API_KEY is not set (check your .env)".to_string())?;
-    let base = std::env::var("DEEPSEEK_BASE_URL")
-        .unwrap_or_else(|_| "https://api.deepseek.com/v1".to_string());
+    // Snapshot the settings, then drop the lock before any await.
+    let (api_key, base, source, target) = {
+        let g = state.lock().unwrap();
+        let s = &g.settings;
+        (
+            s.api_key.clone(),
+            s.base_url.clone(),
+            s.source_lang.clone(),
+            s.target_lang.clone(),
+        )
+    };
+
+    if api_key.trim().is_empty() {
+        return Err("尚未配置 API Key（请在设置中填写）".to_string());
+    }
+
     let url = format!("{}/chat/completions", base.trim_end_matches('/'));
+    let instruction = if source.eq_ignore_ascii_case("auto") || source.is_empty() {
+        format!(
+            "You are a translation engine. Translate the user's text into {target}. \
+             Output ONLY the translation itself — no quotes, no explanations, no extra text."
+        )
+    } else {
+        format!(
+            "You are a translation engine. Translate the user's text from {source} into {target}. \
+             Output ONLY the translation itself — no quotes, no explanations, no extra text."
+        )
+    };
 
     let body = serde_json::json!({
         "model": "deepseek-chat",
         "messages": [
-            {
-                "role": "system",
-                "content": format!(
-                    "You are a translation engine. Translate the user's text into {}. \
-                     Output ONLY the translation itself — no quotes, no explanations, no extra text.",
-                    target
-                )
-            },
+            { "role": "system", "content": instruction },
             { "role": "user", "content": text }
         ],
         "temperature": 0,
@@ -68,9 +183,22 @@ fn hide_window(window: tauri::WebviewWindow) {
     let _ = window.hide();
 }
 
+/// Show the settings window (called from the ⚙ button and the tray menu).
+#[tauri::command]
+fn open_settings(app: AppHandle) {
+    show_settings(&app);
+}
+
+fn show_settings(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
 /// Toggle the floating input: if visible, hide it; otherwise move it just below
 /// the mouse cursor, show it and focus the input field.
-fn toggle_at_cursor(app: &tauri::AppHandle) {
+fn toggle_at_cursor(app: &AppHandle) {
     let Some(win) = app.get_webview_window("main") else {
         return;
     };
@@ -83,38 +211,91 @@ fn toggle_at_cursor(app: &tauri::AppHandle) {
     }
     let _ = win.show();
     let _ = win.set_focus();
-    // tell the frontend to clear + focus the input
     let _ = app.emit("summon", ());
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Load DEEPSEEK_* keys from .env (searches cwd and parent dirs).
+    // Load DEEPSEEK_* keys from .env (searches cwd and parent dirs) for first run.
     let _ = dotenvy::dotenv();
-
-    // Default hotkey: Cmd+Shift+T. Change the string below to rebind.
-    let toggle: Shortcut = "CommandOrControl+Shift+T"
-        .parse()
-        .expect("invalid global shortcut definition");
-    let toggle_for_handler = toggle.clone();
 
     tauri::Builder::default()
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(move |app, shortcut, event| {
-                    if shortcut == &toggle_for_handler && event.state() == ShortcutState::Pressed {
+                .with_handler(move |app, _shortcut, event| {
+                    // Only one shortcut is ever registered, so any press = summon.
+                    if event.state() == ShortcutState::Pressed {
                         toggle_at_cursor(app);
                     }
                 })
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![translate, hide_window])
+        .invoke_handler(tauri::generate_handler![
+            translate,
+            hide_window,
+            get_settings,
+            save_settings,
+            open_settings
+        ])
         .setup(move |app| {
             // No Dock icon — behaves like a lightweight menubar/utility app.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            app.global_shortcut().register(toggle)?;
+            // Load persisted settings (fall back to env-seeded defaults).
+            let config_path = app
+                .path()
+                .app_config_dir()
+                .ok()
+                .map(|d| d.join("settings.json"));
+            let mut settings = Settings::from_env();
+            if let Some(p) = &config_path {
+                if let Ok(raw) = fs::read_to_string(p) {
+                    if let Ok(parsed) = serde_json::from_str::<Settings>(&raw) {
+                        settings = parsed;
+                    }
+                }
+            }
+
+            // Register the configured hotkey (fall back to default if invalid).
+            let shortcut: Shortcut = settings
+                .hotkey
+                .parse()
+                .unwrap_or_else(|_| DEFAULT_HOTKEY.parse().unwrap());
+            app.global_shortcut().register(shortcut)?;
+
+            // System tray (the only persistent entry point for an Accessory app).
+            // "翻译" shows the current hotkey as its accelerator (rendered ⌘⇧T on macOS).
+            let summon_i =
+                MenuItem::with_id(app, "summon", "翻译", true, Some(settings.hotkey.as_str()))?;
+            let settings_i = MenuItem::with_id(app, "settings", "设置…", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&summon_i, &settings_i, &quit_i])?;
+
+            app.manage(Mutex::new(AppState {
+                settings,
+                config_path,
+                translate_item: Some(summon_i.clone()),
+            }));
+
+            let mut tray = TrayIconBuilder::new()
+                .menu(&menu)
+                .show_menu_on_left_click(true)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "summon" => toggle_at_cursor(app),
+                    "settings" => show_settings(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                });
+            // Use the (newly replaced) app logo as the menubar icon. Embedding the
+            // file at build time guarantees the tray reflects the current icon.
+            if let Ok(img) = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png")) {
+                tray = tray.icon(img);
+            } else if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray.build(app)?;
+
             Ok(())
         })
         .run(tauri::generate_context!())

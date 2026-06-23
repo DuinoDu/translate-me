@@ -23,6 +23,17 @@
         "resizable": false,
         "center": false,
         "focus": true
+      },
+      {
+        "label": "settings",
+        "title": "translate-me 设置",
+        "url": "settings.html",
+        "width": 460,
+        "height": 560,
+        "decorations": true,
+        "resizable": true,
+        "visible": false,
+        "center": true
       }
     ],
     "security": {

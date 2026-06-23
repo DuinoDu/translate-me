@@ -7,8 +7,28 @@ const appWindow = getCurrentWindow();
 let inputEl;
 let outputEl;
 let statusEl;
+let hkEl;
 let debounceTimer = null;
 let reqSeq = 0; // guards against out-of-order responses
+
+function prettyAccel(accel) {
+  if (!accel) return "";
+  return accel
+    .replace("CommandOrControl", "⌘")
+    .replace("Command", "⌘")
+    .replace("Control", "⌃")
+    .replace("Alt", "⌥")
+    .replace("Shift", "⇧")
+    .replace("Super", "⌘")
+    .replaceAll("+", "");
+}
+
+async function refreshHotkeyHint() {
+  try {
+    const s = await invoke("get_settings");
+    if (hkEl) hkEl.textContent = prettyAccel(s.hotkey) || "⌘⇧T";
+  } catch (_) {}
+}
 
 function setOutput(text, cls) {
   outputEl.className = "output" + (cls ? " " + cls : "");
@@ -57,8 +77,13 @@ window.addEventListener("DOMContentLoaded", () => {
   inputEl = document.querySelector("#input");
   outputEl = document.querySelector("#output");
   statusEl = document.querySelector("#status");
+  hkEl = document.querySelector("#hk");
 
   inputEl.addEventListener("input", onInput);
+
+  document.querySelector("#gear").addEventListener("click", () => {
+    invoke("open_settings");
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
@@ -74,6 +99,7 @@ window.addEventListener("DOMContentLoaded", () => {
     statusEl.textContent = "";
     inputEl.focus();
     inputEl.select();
+    refreshHotkeyHint();
   });
 
   // Auto-hide when the window loses focus (click elsewhere).
@@ -82,4 +108,5 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   inputEl.focus();
+  refreshHotkeyHint();
 });

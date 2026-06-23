@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>translate-me 设置</title>
+    <script type="module" src="/settings.js" defer></script>
+  </head>
+  <body class="settings-page">
+    <div class="settings">
+      <h1>设置</h1>
+
+      <label class="field">
+        <span class="label">DeepSeek API Key</span>
+        <input id="api_key" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false" />
+      </label>
+
+      <label class="field">
+        <span class="label">API Base URL</span>
+        <input id="base_url" type="text" placeholder="https://api.deepseek.com/v1" spellcheck="false" />
+      </label>
+
+      <label class="field">
+        <span class="label">唤起快捷键</span>
+        <input id="hotkey" type="text" readonly placeholder="点击后按下组合键…" />
+        <span class="hint-text">点击输入框，然后按下你想要的组合键（需含 ⌘/⌃/⌥ 等修饰键）</span>
+      </label>
+
+      <div class="row-2">
+        <label class="field">
+          <span class="label">源语言</span>
+          <select id="source_lang"></select>
+        </label>
+        <label class="field">
+          <span class="label">目标语言</span>
+          <select id="target_lang"></select>
+        </label>
+      </div>
+
+      <div class="actions">
+        <span id="msg" class="msg"></span>
+        <button id="save" class="primary">保存</button>
+      </div>
+    </div>
+  </body>
+</html>

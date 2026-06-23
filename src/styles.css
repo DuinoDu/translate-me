@@ -24,8 +24,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: rgba(28, 28, 32, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(28, 28, 32, 0.96);
   border-radius: 14px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(24px);
@@ -72,10 +71,129 @@ body {
 .hint {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.35);
 }
 
+.hint-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#hk {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+#gear {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+#gear:hover {
+  color: #fff;
+}
+
 #status {
   color: rgba(120, 200, 255, 0.9);
+}
+
+/* ---------- Settings window ---------- */
+.settings-page {
+  background: #1c1c20;
+  color: #f5f5f7;
+}
+
+.settings {
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings h1 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field .label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.field input,
+.field select {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f5f7;
+  font-size: 14px;
+  outline: none;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: rgba(120, 200, 255, 0.7);
+}
+
+.hint-text {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.actions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.msg {
+  margin-right: auto;
+  font-size: 12px;
+}
+
+.msg.ok {
+  color: #6ee7a0;
+}
+
+.msg.error {
+  color: #ff8a8a;
+}
+
+button.primary {
+  padding: 9px 20px;
+  border: none;
+  border-radius: 9px;
+  background: #2f7cf6;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.primary:hover {
+  background: #4a8dff;
 }
