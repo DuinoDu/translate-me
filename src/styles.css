@@ -1,0 +1,81 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+.card {
+  margin: 8px;
+  padding: 14px 16px;
+  height: calc(100% - 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(28, 28, 32, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+#input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #f5f5f7;
+  font-size: 20px;
+  line-height: 1.3;
+  padding: 2px 0;
+}
+
+#input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.output {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 17px;
+  line-height: 1.45;
+  color: #e8f0ff;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.output.empty {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.output.error {
+  color: #ff8a8a;
+  font-size: 14px;
+}
+
+.hint {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+#status {
+  color: rgba(120, 200, 255, 0.9);
+}

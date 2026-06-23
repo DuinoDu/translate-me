@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>translate-me</title>
+    <script type="module" src="/main.js" defer></script>
+  </head>
+  <body>
+    <div class="card">
+      <input
+        id="input"
+        type="text"
+        autocomplete="off"
+        autocorrect="off"
+        spellcheck="false"
+        placeholder="输入要翻译的文字…  (Esc 关闭)"
+      />
+      <div id="output" class="output empty">译文将实时显示在这里</div>
+      <div class="hint"><span id="status"></span><span>⌘⇧T 唤起 · DeepSeek</span></div>
+    </div>
+  </body>
+</html>
