@@ -9,10 +9,10 @@
 ## Demo
 
 <p align="center">
-  <video src="media/translate-me-usage.mp4" width="640" controls>
-    <a href="media/translate-me-usage.mp4">▶ Watch the demo</a>
-  </video>
+  <video src="https://github.com/DuinoDu/translate-me/releases/download/v0.1.0/translate-me-usage.mp4" width="640" controls></video>
 </p>
+
+<p align="center"><em>If the player doesn't load, <a href="https://github.com/DuinoDu/translate-me/releases/download/v0.1.0/translate-me-usage.mp4">watch the demo here</a>.</em></p>
 
 ## Features
 
