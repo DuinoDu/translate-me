@@ -1,13 +1,19 @@
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
-const { getCurrentWindow } = window.__TAURI__.window;
+const { getCurrentWindow, LogicalSize } = window.__TAURI__.window;
 
 const appWindow = getCurrentWindow();
+
+const WIDTH = 480; // fixed window width (logical px); height tracks content
+const MAX_H = 420; // cap; beyond this the output area scrolls
+
+const PLACEHOLDER = "译文…";
 
 let inputEl;
 let outputEl;
 let statusEl;
 let hkEl;
+let copyBtn;
 let debounceTimer = null;
 let reqSeq = 0; // guards against out-of-order responses
 
@@ -23,22 +29,39 @@ function prettyAccel(accel) {
     .replaceAll("+", "");
 }
 
-async function refreshHotkeyHint() {
-  try {
-    const s = await invoke("get_settings");
-    if (hkEl) hkEl.textContent = prettyAccel(s.hotkey) || "⌘⇧T";
-  } catch (_) {}
+// Grow the textarea to fit its text, then resize the window to fit the card.
+function autosize() {
+  inputEl.style.height = "auto";
+  inputEl.style.height = inputEl.scrollHeight + "px";
+  const want = Math.min(MAX_H, Math.ceil(document.documentElement.scrollHeight));
+  appWindow.setSize(new LogicalSize(WIDTH, want)).catch(() => {});
 }
 
 function setOutput(text, cls) {
   outputEl.className = "output" + (cls ? " " + cls : "");
   outputEl.textContent = text;
+  // Copy only makes sense for a real translation.
+  copyBtn.disabled = !(cls === "");
+  autosize();
+}
+
+async function applySettings(s) {
+  const fs = (s && s.font_size) || 15;
+  document.documentElement.style.setProperty("--fs", fs + "px");
+  if (hkEl) hkEl.textContent = prettyAccel(s && s.hotkey) || "⌘⇧T";
+  autosize();
+}
+
+async function refreshSettings() {
+  try {
+    await applySettings(await invoke("get_settings"));
+  } catch (_) {}
 }
 
 async function runTranslate(text) {
   const value = text.trim();
   if (!value) {
-    setOutput("译文将实时显示在这里", "empty");
+    setOutput(PLACEHOLDER, "empty");
     statusEl.textContent = "";
     return;
   }
@@ -48,11 +71,7 @@ async function runTranslate(text) {
     const result = await invoke("translate", { text: value });
     if (myReq !== reqSeq) return; // a newer keystroke superseded this one
     statusEl.textContent = "";
-    if (result) {
-      setOutput(result, "");
-    } else {
-      setOutput("译文将实时显示在这里", "empty");
-    }
+    setOutput(result || PLACEHOLDER, result ? "" : "empty");
   } catch (err) {
     if (myReq !== reqSeq) return;
     statusEl.textContent = "";
@@ -61,8 +80,33 @@ async function runTranslate(text) {
 }
 
 function onInput() {
+  autosize();
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => runTranslate(inputEl.value), 350);
+}
+
+async function copyTranslation() {
+  const text = outputEl.textContent;
+  if (copyBtn.disabled || !text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (_) {
+    // Fallback for environments where the async clipboard API is blocked.
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
+  // Show confirmation in-place on the button (theme-colored check), then restore.
+  copyBtn.textContent = "✓";
+  copyBtn.classList.add("copied");
+  clearTimeout(copyBtn._t);
+  copyBtn._t = setTimeout(() => {
+    copyBtn.textContent = "复制";
+    copyBtn.classList.remove("copied");
+  }, 1000);
 }
 
 async function hide() {
@@ -78,9 +122,10 @@ window.addEventListener("DOMContentLoaded", () => {
   outputEl = document.querySelector("#output");
   statusEl = document.querySelector("#status");
   hkEl = document.querySelector("#hk");
+  copyBtn = document.querySelector("#copy");
 
   inputEl.addEventListener("input", onInput);
-
+  copyBtn.addEventListener("click", copyTranslation);
   document.querySelector("#gear").addEventListener("click", () => {
     invoke("open_settings");
   });
@@ -95,11 +140,10 @@ window.addEventListener("DOMContentLoaded", () => {
   // The hotkey handler in Rust emits "summon" each time the window is shown.
   listen("summon", () => {
     inputEl.value = "";
-    setOutput("译文将实时显示在这里", "empty");
+    setOutput(PLACEHOLDER, "empty");
     statusEl.textContent = "";
     inputEl.focus();
-    inputEl.select();
-    refreshHotkeyHint();
+    refreshSettings();
   });
 
   // Auto-hide when the window loses focus (click elsewhere).
@@ -107,6 +151,7 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!focused) hide();
   });
 
+  setOutput(PLACEHOLDER, "empty");
   inputEl.focus();
-  refreshHotkeyHint();
+  refreshSettings();
 });

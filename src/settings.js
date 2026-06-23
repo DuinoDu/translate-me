@@ -80,6 +80,8 @@ async function load() {
   els.target_lang.value = s.target_lang || "English";
   els.hotkey.dataset.accel = s.hotkey || "";
   els.hotkey.value = prettyAccel(s.hotkey);
+  els.font_size.value = s.font_size || 15;
+  els.fs_val.textContent = els.font_size.value;
 }
 
 async function save() {
@@ -89,6 +91,7 @@ async function save() {
     source_lang: els.source_lang.value,
     target_lang: els.target_lang.value,
     hotkey: els.hotkey.dataset.accel || "CommandOrControl+Shift+T",
+    font_size: parseInt(els.font_size.value, 10) || 15,
   };
   try {
     await invoke("save_settings", { settings });
@@ -107,12 +110,18 @@ window.addEventListener("DOMContentLoaded", () => {
     hotkey: document.querySelector("#hotkey"),
     source_lang: document.querySelector("#source_lang"),
     target_lang: document.querySelector("#target_lang"),
+    font_size: document.querySelector("#font_size"),
+    fs_val: document.querySelector("#fs_val"),
     save: document.querySelector("#save"),
     msg: document.querySelector("#msg"),
   };
 
   fillSelect(els.source_lang, true);
   fillSelect(els.target_lang, false);
+
+  els.font_size.addEventListener("input", () => {
+    els.fs_val.textContent = els.font_size.value;
+  });
 
   els.hotkey.addEventListener("keydown", (e) => {
     e.preventDefault();

@@ -25,6 +25,9 @@ struct Settings {
     target_lang: String,
     #[serde(default = "default_hotkey")]
     hotkey: String,
+    /// Font size (px) for the floating input / translation text.
+    #[serde(default = "default_font_size")]
+    font_size: u32,
 }
 
 fn default_base_url() -> String {
@@ -39,6 +42,9 @@ fn default_target() -> String {
 fn default_hotkey() -> String {
     DEFAULT_HOTKEY.to_string()
 }
+fn default_font_size() -> u32 {
+    15
+}
 
 impl Settings {
     /// Initial settings seeded from environment / .env (first run only).
@@ -49,6 +55,7 @@ impl Settings {
             source_lang: default_source(),
             target_lang: default_target(),
             hotkey: default_hotkey(),
+            font_size: default_font_size(),
         }
     }
 }
