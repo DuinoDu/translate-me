@@ -7,24 +7,49 @@
     <title>translate-me</title>
     <script type="module" src="/main.js" defer></script>
   </head>
-  <body>
+  <body class="main-page" lang="zh">
     <div class="card">
-      <textarea
-        id="input"
-        rows="1"
-        autocomplete="off"
-        autocorrect="off"
-        spellcheck="false"
-        placeholder="输入要翻译的文字…  (Esc 关闭)"
-      ></textarea>
-      <div id="output" class="output empty">译文…</div>
-      <div class="hint">
-        <span id="status"></span>
-        <span class="hint-right">
-          <button id="copy" title="复制译文" tabindex="-1" disabled>复制</button>
-          <span id="hk">⌥Space</span> · DeepSeek
-          <button id="gear" title="设置" tabindex="-1">⚙</button>
-        </span>
+      <div class="composer">
+        <textarea
+          id="input"
+          rows="1"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+          placeholder="输入要翻译的文字"
+          aria-label="输入要翻译的文字"
+        ></textarea>
+      </div>
+
+      <div class="result-panel" aria-live="polite">
+        <div id="output" class="output empty">译文…</div>
+        <div class="result-foot">
+          <span id="status" class="status-text"></span>
+          <button
+            id="copy"
+            class="copy-action"
+            type="button"
+            title="复制译文"
+            aria-label="复制译文"
+            tabindex="-1"
+            disabled
+          >
+            复制
+          </button>
+        </div>
+      </div>
+
+      <div id="drag-handle" class="card-foot" role="toolbar" aria-label="浮窗工具栏">
+        <span id="lang-chip" class="lang-chip">自动 → 中文</span>
+        <div class="card-actions">
+          <span id="provider" class="provider-note">服务</span>
+          <button id="gear" class="icon-button" type="button" title="设置" aria-label="打开设置" tabindex="-1">
+            ⚙
+          </button>
+          <button id="resize" class="resize-handle" type="button" aria-label="拖动调整窗口大小" title="拖动调整窗口大小" tabindex="-1">
+            <span></span><span></span><span></span>
+          </button>
+        </div>
       </div>
     </div>
   </body>

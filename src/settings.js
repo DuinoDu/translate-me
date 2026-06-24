@@ -23,6 +23,7 @@ const LANGS = [
 ];
 
 let els = {};
+let currentProvider = "openai";
 
 function autosize() {
   requestAnimationFrame(() => {
@@ -109,6 +110,7 @@ async function load() {
   els.api_key.value = s.api_key || "";
   els.base_url.value = s.base_url || "";
   els.provider.value = s.provider || "openai";
+  currentProvider = els.provider.value;
   els.model.value = s.model || defaultModelForProvider(els.provider.value);
   els.source_lang.value = s.source_lang || "auto";
   els.target_lang.value = s.target_lang || "English";
@@ -135,7 +137,7 @@ async function save() {
   };
   try {
     await invoke("save_settings", { settings });
-    flash("已保存 ✓", false);
+    flash("已保存", false);
     // Briefly show the confirmation, then close the settings window.
     setTimeout(() => appWindow.hide(), 600);
   } catch (err) {
@@ -162,8 +164,17 @@ window.addEventListener("DOMContentLoaded", () => {
   fillSelect(els.target_lang, false);
 
   els.provider.addEventListener("change", () => {
+    const previous = currentProvider;
+    currentProvider = els.provider.value;
     els.base_url.placeholder = defaultBaseUrlForProvider(els.provider.value);
     els.model.placeholder = defaultModelForProvider(els.provider.value);
+    if (!els.base_url.value.trim() || els.base_url.value.trim() === defaultBaseUrlForProvider(previous)) {
+      els.base_url.value = defaultBaseUrlForProvider(els.provider.value);
+    }
+    if (!els.model.value.trim() || els.model.value.trim() === defaultModelForProvider(previous)) {
+      els.model.value = defaultModelForProvider(els.provider.value);
+    }
+    flash("", false);
   });
 
   els.font_size.addEventListener("input", () => {
