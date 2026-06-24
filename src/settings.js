@@ -18,6 +18,16 @@ const LANGS = [
 
 let els = {};
 
+function defaultModelForProvider(provider) {
+  return provider === "anthropic" ? "mimo-v2.5" : "deepseek-chat";
+}
+
+function defaultBaseUrlForProvider(provider) {
+  return provider === "anthropic"
+    ? "https://api.anthropic.com"
+    : "https://api.deepseek.com/v1";
+}
+
 function fillSelect(sel, includeAuto) {
   const opts = [];
   if (includeAuto) opts.push(["auto", "自动检测"]);
@@ -76,18 +86,25 @@ async function load() {
   const s = await invoke("get_settings");
   els.api_key.value = s.api_key || "";
   els.base_url.value = s.base_url || "";
+  els.provider.value = s.provider || "openai";
+  els.model.value = s.model || defaultModelForProvider(els.provider.value);
   els.source_lang.value = s.source_lang || "auto";
   els.target_lang.value = s.target_lang || "English";
   els.hotkey.dataset.accel = s.hotkey || "";
   els.hotkey.value = prettyAccel(s.hotkey);
   els.font_size.value = s.font_size || 15;
   els.fs_val.textContent = els.font_size.value;
+  els.base_url.placeholder = defaultBaseUrlForProvider(els.provider.value);
+  els.model.placeholder = defaultModelForProvider(els.provider.value);
 }
 
 async function save() {
+  const provider = els.provider.value;
   const settings = {
     api_key: els.api_key.value.trim(),
-    base_url: (els.base_url.value.trim() || "https://api.deepseek.com/v1"),
+    base_url: els.base_url.value.trim() || defaultBaseUrlForProvider(provider),
+    provider,
+    model: els.model.value.trim() || defaultModelForProvider(provider),
     source_lang: els.source_lang.value,
     target_lang: els.target_lang.value,
     hotkey: els.hotkey.dataset.accel || "Alt+Space",
@@ -107,6 +124,8 @@ window.addEventListener("DOMContentLoaded", () => {
   els = {
     api_key: document.querySelector("#api_key"),
     base_url: document.querySelector("#base_url"),
+    provider: document.querySelector("#provider"),
+    model: document.querySelector("#model"),
     hotkey: document.querySelector("#hotkey"),
     source_lang: document.querySelector("#source_lang"),
     target_lang: document.querySelector("#target_lang"),
@@ -118,6 +137,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
   fillSelect(els.source_lang, true);
   fillSelect(els.target_lang, false);
+
+  els.provider.addEventListener("change", () => {
+    els.base_url.placeholder = defaultBaseUrlForProvider(els.provider.value);
+    els.model.placeholder = defaultModelForProvider(els.provider.value);
+  });
 
   els.font_size.addEventListener("input", () => {
     els.fs_val.textContent = els.font_size.value;
