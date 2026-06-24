@@ -124,13 +124,6 @@ body {
   cursor: default;
 }
 
-#copy.copied {
-  border-color: var(--theme);
-  background: var(--theme-soft);
-  color: var(--theme);
-  font-size: 12px;
-}
-
 #status {
   color: var(--theme);
 }

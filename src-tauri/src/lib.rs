@@ -8,7 +8,8 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-const DEFAULT_HOTKEY: &str = "CommandOrControl+Shift+T";
+const DEFAULT_HOTKEY: &str = "Alt+Space";
+const LEGACY_DEFAULT_HOTKEY: &str = "CommandOrControl+Shift+T";
 const DEFAULT_BASE_URL: &str = "https://api.deepseek.com/v1";
 
 /// User-configurable settings, persisted to `settings.json` in the app config dir.
@@ -68,6 +69,14 @@ struct AppState {
 
 type SharedState = Mutex<AppState>;
 
+fn write_settings_file(path: &PathBuf, settings: &Settings) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
+    let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| format!("写入配置失败: {e}"))
+}
+
 /// Return the current settings to the frontend.
 #[tauri::command]
 fn get_settings(state: State<'_, SharedState>) -> Settings {
@@ -100,11 +109,7 @@ fn save_settings(
     }
     guard.settings = settings;
     if let Some(path) = guard.config_path.clone() {
-        if let Some(dir) = path.parent() {
-            let _ = fs::create_dir_all(dir);
-        }
-        let json = serde_json::to_string_pretty(&guard.settings).map_err(|e| e.to_string())?;
-        fs::write(&path, json).map_err(|e| format!("写入配置失败: {e}"))?;
+        write_settings_file(&path, &guard.settings)?;
     }
     Ok(())
 }
@@ -203,22 +208,136 @@ fn show_settings(app: &AppHandle) {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn prepare_overlay_window(win: &tauri::WebviewWindow) {
+    use objc2_app_kit::{NSPopUpMenuWindowLevel, NSWindow, NSWindowCollectionBehavior};
+
+    let _ = win.set_always_on_top(true);
+    let _ = win.set_focusable(true);
+    let _ = win.set_visible_on_all_workspaces(false);
+
+    if let Ok(raw) = win.ns_window() {
+        let ns_window: &NSWindow = unsafe { &*raw.cast::<NSWindow>() };
+        let mut behavior = ns_window.collectionBehavior();
+        behavior &= !(NSWindowCollectionBehavior::CanJoinAllSpaces
+            | NSWindowCollectionBehavior::FullScreenPrimary
+            | NSWindowCollectionBehavior::FullScreenNone
+            | NSWindowCollectionBehavior::Managed
+            | NSWindowCollectionBehavior::Primary
+            | NSWindowCollectionBehavior::Auxiliary
+            | NSWindowCollectionBehavior::Stationary);
+        behavior |= NSWindowCollectionBehavior::MoveToActiveSpace
+            | NSWindowCollectionBehavior::FullScreenAuxiliary
+            | NSWindowCollectionBehavior::CanJoinAllApplications
+            | NSWindowCollectionBehavior::Transient;
+
+        ns_window.setCollectionBehavior(behavior);
+        ns_window.setLevel(NSPopUpMenuWindowLevel);
+        ns_window.setCanHide(false);
+        ns_window.setHidesOnDeactivate(false);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn prepare_overlay_window(_win: &tauri::WebviewWindow) {}
+
+#[cfg(target_os = "macos")]
+fn focus_overlay_window(win: &tauri::WebviewWindow) {
+    use objc2_app_kit::NSWindow;
+
+    if let Ok(raw) = win.ns_window() {
+        let ns_window: &NSWindow = unsafe { &*raw.cast::<NSWindow>() };
+        ns_window.makeKeyAndOrderFront(None);
+        ns_window.orderFrontRegardless();
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn focus_overlay_window(_win: &tauri::WebviewWindow) {}
+
+#[cfg(target_os = "macos")]
+fn overlay_is_frontmost(win: &tauri::WebviewWindow) -> bool {
+    use objc2_app_kit::NSWindow;
+
+    if let Ok(raw) = win.ns_window() {
+        let ns_window: &NSWindow = unsafe { &*raw.cast::<NSWindow>() };
+        ns_window.isVisible() && ns_window.isKeyWindow()
+    } else {
+        win.is_visible().unwrap_or(false) && win.is_focused().unwrap_or(false)
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn overlay_is_frontmost(win: &tauri::WebviewWindow) -> bool {
+    win.is_visible().unwrap_or(false) && win.is_focused().unwrap_or(false)
+}
+
+fn position_near_cursor(app: &AppHandle, win: &tauri::WebviewWindow) {
+    let Ok(cursor) = app.cursor_position() else {
+        return;
+    };
+
+    let Some(monitor) = app
+        .monitor_from_point(cursor.x, cursor.y)
+        .ok()
+        .flatten()
+        .or_else(|| win.current_monitor().ok().flatten())
+        .or_else(|| app.primary_monitor().ok().flatten())
+    else {
+        let _ = win.set_position(PhysicalPosition::new(
+            cursor.x.round() as i32,
+            cursor.y.round() as i32 + 18,
+        ));
+        return;
+    };
+
+    let work_area = monitor.work_area();
+    let size = win.outer_size().ok();
+    let width = size.map(|s| s.width as i32).unwrap_or(480);
+    let height = size.map(|s| s.height as i32).unwrap_or(180);
+    let margin = 8;
+
+    let min_x = work_area.position.x + margin;
+    let min_y = work_area.position.y + margin;
+    let max_x = work_area.position.x + work_area.size.width as i32 - width - margin;
+    let max_y = work_area.position.y + work_area.size.height as i32 - height - margin;
+    let x = (cursor.x.round() as i32).clamp(min_x, max_x.max(min_x));
+    let y = (cursor.y.round() as i32 + 18).clamp(min_y, max_y.max(min_y));
+
+    let _ = win.set_position(PhysicalPosition::new(x, y));
+}
+
+/// Force the floating input to show near the cursor and become the frontmost
+/// window. This path is used by both tray menu and hotkey summon.
+fn show_at_cursor(app: &AppHandle) {
+    let Some(win) = app.get_webview_window("main") else {
+        return;
+    };
+
+    if win.is_visible().unwrap_or(false) && !overlay_is_frontmost(&win) {
+        let _ = win.hide();
+    }
+    prepare_overlay_window(&win);
+    let _ = win.unminimize();
+    position_near_cursor(app, &win);
+    let _ = win.show();
+    focus_overlay_window(&win);
+    let _ = win.set_focus();
+    focus_overlay_window(&win);
+    let _ = app.emit("summon", ());
+}
+
 /// Toggle the floating input: if visible, hide it; otherwise move it just below
 /// the mouse cursor, show it and focus the input field.
 fn toggle_at_cursor(app: &AppHandle) {
     let Some(win) = app.get_webview_window("main") else {
         return;
     };
-    if win.is_visible().unwrap_or(false) {
+    if overlay_is_frontmost(&win) {
         let _ = win.hide();
         return;
     }
-    if let Ok(pos) = app.cursor_position() {
-        let _ = win.set_position(PhysicalPosition::new(pos.x as i32, pos.y as i32 + 18));
-    }
-    let _ = win.show();
-    let _ = win.set_focus();
-    let _ = app.emit("summon", ());
+    show_at_cursor(app);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -232,7 +351,8 @@ pub fn run() {
                 .with_handler(move |app, _shortcut, event| {
                     // Only one shortcut is ever registered, so any press = summon.
                     if event.state() == ShortcutState::Pressed {
-                        toggle_at_cursor(app);
+                        let app_handle = app.clone();
+                        let _ = app.run_on_main_thread(move || toggle_at_cursor(&app_handle));
                     }
                 })
                 .build(),
@@ -249,6 +369,10 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
+            if let Some(win) = app.get_webview_window("main") {
+                prepare_overlay_window(&win);
+            }
+
             // Load persisted settings (fall back to env-seeded defaults).
             let config_path = app
                 .path()
@@ -263,6 +387,12 @@ pub fn run() {
                     }
                 }
             }
+            if settings.hotkey == LEGACY_DEFAULT_HOTKEY {
+                settings.hotkey = default_hotkey();
+                if let Some(path) = &config_path {
+                    let _ = write_settings_file(path, &settings);
+                }
+            }
 
             // Register the configured hotkey (fall back to default if invalid).
             let shortcut: Shortcut = settings
@@ -272,7 +402,7 @@ pub fn run() {
             app.global_shortcut().register(shortcut)?;
 
             // System tray (the only persistent entry point for an Accessory app).
-            // "翻译" shows the current hotkey as its accelerator (rendered ⌘⇧T on macOS).
+            // "翻译" shows the current hotkey as its accelerator (rendered ⌥Space on macOS).
             let summon_i =
                 MenuItem::with_id(app, "summon", "翻译", true, Some(settings.hotkey.as_str()))?;
             let settings_i = MenuItem::with_id(app, "settings", "设置…", true, None::<&str>)?;
@@ -289,7 +419,7 @@ pub fn run() {
                 .menu(&menu)
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "summon" => toggle_at_cursor(app),
+                    "summon" => show_at_cursor(app),
                     "settings" => show_settings(app),
                     "quit" => app.exit(0),
                     _ => {}

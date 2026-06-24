@@ -16,6 +16,8 @@ let hkEl;
 let copyBtn;
 let debounceTimer = null;
 let reqSeq = 0; // guards against out-of-order responses
+let focusedSinceSummon = false;
+let suppressAutoHideUntil = 0;
 
 function prettyAccel(accel) {
   if (!accel) return "";
@@ -41,14 +43,15 @@ function setOutput(text, cls) {
   outputEl.className = "output" + (cls ? " " + cls : "");
   outputEl.textContent = text;
   // Copy only makes sense for a real translation.
-  copyBtn.disabled = !(cls === "");
+  const hasTranslation = cls === "";
+  copyBtn.disabled = !hasTranslation;
   autosize();
 }
 
 async function applySettings(s) {
   const fs = (s && s.font_size) || 15;
   document.documentElement.style.setProperty("--fs", fs + "px");
-  if (hkEl) hkEl.textContent = prettyAccel(s && s.hotkey) || "⌘⇧T";
+  if (hkEl) hkEl.textContent = prettyAccel(s && s.hotkey) || "⌥Space";
   autosize();
 }
 
@@ -99,22 +102,24 @@ async function copyTranslation() {
     document.execCommand("copy");
     document.body.removeChild(ta);
   }
-  // Show confirmation in-place on the button (theme-colored check), then restore.
-  copyBtn.textContent = "✓";
-  copyBtn.classList.add("copied");
-  clearTimeout(copyBtn._t);
-  copyBtn._t = setTimeout(() => {
-    copyBtn.textContent = "复制";
-    copyBtn.classList.remove("copied");
-  }, 1000);
+  await hide();
 }
 
 async function hide() {
   if (debounceTimer) clearTimeout(debounceTimer);
+  focusedSinceSummon = false;
+  suppressAutoHideUntil = 0;
   reqSeq++; // cancel any in-flight render
   try {
     await invoke("hide_window");
   } catch (_) {}
+}
+
+function focusInputSoon() {
+  inputEl.focus();
+  requestAnimationFrame(() => inputEl.focus());
+  setTimeout(() => inputEl.focus(), 60);
+  setTimeout(() => inputEl.focus(), 180);
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -139,16 +144,23 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // The hotkey handler in Rust emits "summon" each time the window is shown.
   listen("summon", () => {
+    focusedSinceSummon = false;
+    suppressAutoHideUntil = Date.now() + 900;
     inputEl.value = "";
     setOutput(PLACEHOLDER, "empty");
     statusEl.textContent = "";
-    inputEl.focus();
+    focusInputSoon();
     refreshSettings();
   });
 
   // Auto-hide when the window loses focus (click elsewhere).
   appWindow.onFocusChanged(({ payload: focused }) => {
-    if (!focused) hide();
+    if (focused) {
+      focusedSinceSummon = true;
+      return;
+    }
+    if (!focusedSinceSummon || Date.now() < suppressAutoHideUntil) return;
+    hide();
   });
 
   setOutput(PLACEHOLDER, "empty");

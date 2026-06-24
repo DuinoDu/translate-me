@@ -23,28 +23,42 @@ if [ -f .env.signing ]; then
 fi
 
 : "${APPLE_SIGNING_IDENTITY:?Set APPLE_SIGNING_IDENTITY (e.g. 'Developer ID Application: NAME (TEAMID)') in .env.signing}"
-
-echo "==> Signing identity: $APPLE_SIGNING_IDENTITY"
-if [ -n "${APPLE_API_KEY_PATH:-}" ]; then
-  echo "==> Notarizing via App Store Connect API key"
-elif [ -n "${APPLE_ID:-}" ]; then
-  echo "==> Notarizing via Apple ID + app-specific password"
-else
-  echo "!! No notary credentials found — the build will be SIGNED but NOT notarized."
+if [[ "$APPLE_SIGNING_IDENTITY" != Developer\ ID\ Application:* ]]; then
+  echo "APPLE_SIGNING_IDENTITY must be a Developer ID Application certificate for outside-App-Store distribution." >&2
+  exit 1
 fi
 
-npm run tauri build
+echo "==> Signing identity: $APPLE_SIGNING_IDENTITY"
+if [ -n "${APPLE_API_ISSUER:-}" ] && [ -n "${APPLE_API_KEY:-}" ] && [ -n "${APPLE_API_KEY_PATH:-}" ]; then
+  echo "==> Notarizing via App Store Connect API key"
+elif [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+  echo "==> Notarizing via Apple ID + app-specific password"
+else
+  echo "Set notarization credentials in .env.signing: either APPLE_API_ISSUER/APPLE_API_KEY/APPLE_API_KEY_PATH or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID." >&2
+  exit 1
+fi
+
+export CI="${CI:-true}"
+npm run tauri -- build --bundles dmg
 
 APP="src-tauri/target/release/bundle/macos/translate-me.app"
 DMG="$(ls -t src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null | head -1 || true)"
+if [ ! -d "$APP" ]; then
+  echo "Missing app bundle: $APP" >&2
+  exit 1
+fi
+if [ -z "$DMG" ] || [ ! -f "$DMG" ]; then
+  echo "Missing DMG bundle under src-tauri/target/release/bundle/dmg" >&2
+  exit 1
+fi
 
 echo
 echo "==> codesign verification"
-codesign --verify --deep --strict --verbose=2 "$APP" || true
+codesign --verify --deep --strict --verbose=2 "$APP"
+echo "==> Stapler validation"
+xcrun stapler validate "$APP"
+xcrun stapler validate "$DMG"
 echo "==> Gatekeeper assessment (should say: accepted, source=Notarized Developer ID)"
-spctl -a -vvv -t install "$APP" || true
-if [ -n "$DMG" ]; then
-  echo "==> Stapler validation"
-  xcrun stapler validate "$DMG" || true
-  echo "==> DMG: $DMG"
-fi
+spctl -a -vvv -t execute "$APP"
+spctl -a -vvv -t install "$DMG"
+echo "==> DMG: $DMG"

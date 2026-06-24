@@ -27,7 +27,7 @@ function fillSelect(sel, includeAuto) {
     .join("");
 }
 
-// Build a Tauri accelerator string (e.g. "CommandOrControl+Shift+T") from a keydown event.
+// Build a Tauri accelerator string (e.g. "Alt+Space") from a keydown event.
 function accelFromEvent(e) {
   const mods = [];
   if (e.metaKey) mods.push("CommandOrControl");
@@ -90,7 +90,7 @@ async function save() {
     base_url: (els.base_url.value.trim() || "https://api.deepseek.com/v1"),
     source_lang: els.source_lang.value,
     target_lang: els.target_lang.value,
-    hotkey: els.hotkey.dataset.accel || "CommandOrControl+Shift+T",
+    hotkey: els.hotkey.dataset.accel || "Alt+Space",
     font_size: parseInt(els.font_size.value, 10) || 15,
   };
   try {

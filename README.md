@@ -22,9 +22,9 @@
 
 ## Features
 
-- **⌘⇧T** to summon / dismiss — the input box appears at your cursor
+- **⌥Space** to summon / dismiss — the input box appears at your cursor
 - Translates live as you type (DeepSeek `deepseek-chat`, 350ms debounce)
-- Auto-growing box, one-click **copy**, **Esc** to dismiss
+- Auto-growing box, one-click **copy then hide**, **Esc** to dismiss
 - Frameless · translucent · always-on-top · no Dock icon (menubar tray app)
 - Settings panel: API key, hotkey, source / target language, font size
 
@@ -34,6 +34,21 @@
 npm install
 npm run tauri dev      # develop
 npm run tauri build    # bundle .app / .dmg
+./scripts/install-local.sh
+```
+
+For local builds, use `./scripts/install-local.sh` instead of manually copying
+the `.app`. It builds, installs to `/Applications`, removes quarantine metadata,
+and applies a stable local code-signing requirement.
+
+Or you can install `translate-me` by claude code or codex:
+
+```
+claude --dangerously-skip-permissions "Install translate-me from source: https://github.com/duinodu/translate-me"
+```
+
+```
+codex --dangerously-bypass-approvals-and-sandbox "Install translate-me from source: https://github.com/duinodu/translate-me"
 ```
 
 ## Configure
