@@ -12,13 +12,27 @@
       <h1>设置</h1>
 
       <label class="field">
-        <span class="label">DeepSeek API Key</span>
+        <span class="label">API Token</span>
         <input id="api_key" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false" />
       </label>
 
+      <div class="row-2">
+        <label class="field">
+          <span class="label">API 类型</span>
+          <select id="provider">
+            <option value="openai">OpenAI-compatible</option>
+            <option value="anthropic">Anthropic-compatible</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="label">模型</span>
+          <input id="model" type="text" placeholder="按 API 类型自动选择默认模型" spellcheck="false" />
+        </label>
+      </div>
+
       <label class="field">
         <span class="label">API Base URL</span>
-        <input id="base_url" type="text" placeholder="https://api.deepseek.com/v1" spellcheck="false" />
+        <input id="base_url" type="text" placeholder="按 API 类型自动选择默认地址" spellcheck="false" />
       </label>
 
       <label class="field">
