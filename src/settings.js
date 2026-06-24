@@ -1,5 +1,11 @@
 const { invoke } = window.__TAURI__.core;
-const { getCurrentWindow } = window.__TAURI__.window;
+const { getCurrentWindow, LogicalSize } = window.__TAURI__.window;
+
+const appWindow = getCurrentWindow();
+const SETTINGS_WIDTH = 460;
+const SETTINGS_MIN_H = 560;
+const SETTINGS_MAX_H = 760;
+const DECORATED_WINDOW_CHROME_H = 40;
 
 // value = English name used in the prompt; label = friendly display.
 const LANGS = [
@@ -17,6 +23,21 @@ const LANGS = [
 ];
 
 let els = {};
+
+function autosize() {
+  requestAnimationFrame(() => {
+    const contentHeight = Math.ceil(document.documentElement.scrollHeight);
+    const screenMax = Math.max(
+      SETTINGS_MIN_H,
+      Math.min(SETTINGS_MAX_H, window.screen.availHeight - 80),
+    );
+    const height = Math.min(
+      screenMax,
+      Math.max(SETTINGS_MIN_H, contentHeight + DECORATED_WINDOW_CHROME_H),
+    );
+    appWindow.setSize(new LogicalSize(SETTINGS_WIDTH, height)).catch(() => {});
+  });
+}
 
 function defaultModelForProvider(provider) {
   return provider === "anthropic" ? "mimo-v2.5" : "deepseek-chat";
@@ -80,6 +101,7 @@ function prettyAccel(accel) {
 function flash(text, isError) {
   els.msg.textContent = text;
   els.msg.className = "msg" + (isError ? " error" : " ok");
+  autosize();
 }
 
 async function load() {
@@ -96,6 +118,7 @@ async function load() {
   els.fs_val.textContent = els.font_size.value;
   els.base_url.placeholder = defaultBaseUrlForProvider(els.provider.value);
   els.model.placeholder = defaultModelForProvider(els.provider.value);
+  autosize();
 }
 
 async function save() {
@@ -114,7 +137,7 @@ async function save() {
     await invoke("save_settings", { settings });
     flash("已保存 ✓", false);
     // Briefly show the confirmation, then close the settings window.
-    setTimeout(() => getCurrentWindow().hide(), 600);
+    setTimeout(() => appWindow.hide(), 600);
   } catch (err) {
     flash(String(err), true);
   }
@@ -164,9 +187,11 @@ window.addEventListener("DOMContentLoaded", () => {
   els.save.addEventListener("click", save);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && document.activeElement !== els.hotkey) {
-      getCurrentWindow().hide();
+      appWindow.hide();
     }
   });
 
-  load();
+  load().catch((err) => {
+    flash(String(err), true);
+  });
 });

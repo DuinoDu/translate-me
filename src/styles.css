@@ -20,6 +20,14 @@ body {
   overflow: hidden;
 }
 
+html.settings-root,
+html.settings-root body {
+  height: auto;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 .card {
   margin: 0;
   padding: 12px 14px;
