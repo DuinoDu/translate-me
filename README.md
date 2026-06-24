@@ -23,7 +23,7 @@
 ## Features
 
 - **⌘⇧T** to summon / dismiss — the input box appears at your cursor
-- Translates live as you type (DeepSeek `deepseek-chat`, 350ms debounce)
+- Translates live as you type (OpenAI-compatible or Anthropic-compatible APIs, 350ms debounce)
 - Auto-growing box, one-click **copy**, **Esc** to dismiss
 - Frameless · translucent · always-on-top · no Dock icon (menubar tray app)
 - Settings panel: API key, hotkey, source / target language, font size
@@ -38,6 +38,6 @@ npm run tauri build    # bundle .app / .dmg
 
 ## Configure
 
-Open **Settings** from the menubar tray icon (or the ⚙ button) to set the API key,
-hotkey, languages and font size. Settings persist to
+Open **Settings** from the menubar tray icon (or the ⚙ button) to set the API token,
+provider, model, hotkey, languages and font size. Settings persist to
 `~/Library/Application Support/com.duino.translateme/settings.json`.

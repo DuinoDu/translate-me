@@ -10,6 +10,9 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 const DEFAULT_HOTKEY: &str = "CommandOrControl+Shift+T";
 const DEFAULT_BASE_URL: &str = "https://api.deepseek.com/v1";
+const DEFAULT_PROVIDER: &str = "openai";
+const DEFAULT_MODEL: &str = "deepseek-chat";
+const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
 
 /// User-configurable settings, persisted to `settings.json` in the app config dir.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,6 +21,10 @@ struct Settings {
     api_key: String,
     #[serde(default = "default_base_url")]
     base_url: String,
+    #[serde(default = "default_provider")]
+    provider: String,
+    #[serde(default = "default_model")]
+    model: String,
     /// Source language, or "auto" to let the model detect it.
     #[serde(default = "default_source")]
     source_lang: String,
@@ -31,7 +38,23 @@ struct Settings {
 }
 
 fn default_base_url() -> String {
-    std::env::var("DEEPSEEK_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string())
+    std::env::var("ANTHROPIC_BASE_URL")
+        .or_else(|_| std::env::var("DEEPSEEK_BASE_URL"))
+        .unwrap_or_else(|_| DEFAULT_BASE_URL.to_string())
+}
+fn default_provider() -> String {
+    if std::env::var("ANTHROPIC_AUTH_TOKEN").is_ok() || std::env::var("ANTHROPIC_BASE_URL").is_ok() {
+        "anthropic".to_string()
+    } else {
+        DEFAULT_PROVIDER.to_string()
+    }
+}
+fn default_model() -> String {
+    std::env::var("ANTHROPIC_SMALL_FAST_MODEL")
+        .or_else(|_| std::env::var("ANTHROPIC_DEFAULT_HAIKU_MODEL"))
+        .or_else(|_| std::env::var("ANTHROPIC_DEFAULT_SONNET_MODEL"))
+        .or_else(|_| std::env::var("ANTHROPIC_DEFAULT_OPUS_MODEL"))
+        .unwrap_or_else(|_| DEFAULT_MODEL.to_string())
 }
 fn default_source() -> String {
     "auto".to_string()
@@ -49,9 +72,14 @@ fn default_font_size() -> u32 {
 impl Settings {
     /// Initial settings seeded from environment / .env (first run only).
     fn from_env() -> Self {
+        let provider = default_provider();
         Settings {
-            api_key: std::env::var("DEEPSEEK_API_KEY").unwrap_or_default(),
+            api_key: std::env::var("ANTHROPIC_AUTH_TOKEN")
+                .or_else(|_| std::env::var("DEEPSEEK_API_KEY"))
+                .unwrap_or_default(),
             base_url: default_base_url(),
+            provider,
+            model: default_model(),
             source_lang: default_source(),
             target_lang: default_target(),
             hotkey: default_hotkey(),
@@ -109,7 +137,7 @@ fn save_settings(
     Ok(())
 }
 
-/// Translate `text` using the DeepSeek chat API and the saved settings.
+/// Translate `text` using the configured provider and the saved settings.
 #[tauri::command]
 async fn translate(text: String, state: State<'_, SharedState>) -> Result<String, String> {
     let text = text.trim().to_string();
@@ -118,12 +146,14 @@ async fn translate(text: String, state: State<'_, SharedState>) -> Result<String
     }
 
     // Snapshot the settings, then drop the lock before any await.
-    let (api_key, base, source, target) = {
+    let (api_key, base, provider, model, source, target) = {
         let g = state.lock().unwrap();
         let s = &g.settings;
         (
             s.api_key.clone(),
             s.base_url.clone(),
+            s.provider.clone(),
+            s.model.clone(),
             s.source_lang.clone(),
             s.target_lang.clone(),
         )
@@ -133,7 +163,6 @@ async fn translate(text: String, state: State<'_, SharedState>) -> Result<String
         return Err("尚未配置 API Key（请在设置中填写）".to_string());
     }
 
-    let url = format!("{}/chat/completions", base.trim_end_matches('/'));
     let instruction = if source.eq_ignore_ascii_case("auto") || source.is_empty() {
         format!(
             "You are a translation engine. Translate the user's text into {target}. \
@@ -146,8 +175,62 @@ async fn translate(text: String, state: State<'_, SharedState>) -> Result<String
         )
     };
 
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    if provider.eq_ignore_ascii_case("anthropic") {
+        let url = format!("{}/v1/messages", base.trim_end_matches('/'));
+        let body = serde_json::json!({
+            "model": model,
+            "max_tokens": 512,
+            "thinking": { "type": "disabled" },
+            "system": instruction,
+            "messages": [
+                { "role": "user", "content": text }
+            ]
+        });
+
+        let resp = client
+            .post(&url)
+            .header("x-api-key", api_key)
+            .header("anthropic-version", DEFAULT_ANTHROPIC_VERSION)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("request failed: {e}"))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let detail = resp.text().await.unwrap_or_default();
+            return Err(format!("Anthropic API error {status}: {detail}"));
+        }
+
+        let v: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+        let out = v["content"]
+            .as_array()
+            .map(|blocks| {
+                blocks
+                    .iter()
+                    .filter_map(|block| {
+                        if block["type"].as_str() == Some("text") {
+                            block["text"].as_str().map(str::trim)
+                        } else {
+                            None
+                        }
+                    })
+                    .filter(|text| !text.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .unwrap_or_default();
+        return Ok(out);
+    }
+
+    let url = format!("{}/chat/completions", base.trim_end_matches('/'));
     let body = serde_json::json!({
-        "model": "deepseek-chat",
+        "model": model,
         "messages": [
             { "role": "system", "content": instruction },
             { "role": "user", "content": text }
@@ -155,11 +238,6 @@ async fn translate(text: String, state: State<'_, SharedState>) -> Result<String
         "temperature": 0,
         "stream": false
     });
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .map_err(|e| e.to_string())?;
 
     let resp = client
         .post(&url)
@@ -172,7 +250,7 @@ async fn translate(text: String, state: State<'_, SharedState>) -> Result<String
     if !resp.status().is_success() {
         let status = resp.status();
         let detail = resp.text().await.unwrap_or_default();
-        return Err(format!("DeepSeek API error {status}: {detail}"));
+        return Err(format!("OpenAI-compatible API error {status}: {detail}"));
     }
 
     let v: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
