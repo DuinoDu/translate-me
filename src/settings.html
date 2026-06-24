@@ -7,59 +7,83 @@
     <title>translate-me 设置</title>
     <script type="module" src="/settings.js" defer></script>
   </head>
-  <body class="settings-page">
-    <div class="settings">
-      <h1>设置</h1>
+  <body class="settings-page" lang="zh">
+    <div class="settings-shell">
+      <header class="settings-header">
+        <h1>设置</h1>
+        <p class="settings-intro">保留轻量体验，只配置真正会影响临时翻译的部分。</p>
+      </header>
 
-      <label class="field">
-        <span class="label">API Token</span>
-        <input id="api_key" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false" />
-      </label>
+      <section class="settings-group">
+        <div class="group-head">
+          <h2>模型服务</h2>
+          <p>选择接口类型、模型和地址。配置仅保存在本机。</p>
+        </div>
 
-      <div class="row-2">
         <label class="field">
-          <span class="label">API 类型</span>
-          <select id="provider">
-            <option value="openai">OpenAI-compatible</option>
-            <option value="anthropic">Anthropic-compatible</option>
-          </select>
+          <span class="label">API Token</span>
+          <input id="api_key" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false" />
         </label>
+
+        <div class="row-2">
+          <label class="field">
+            <span class="label">API 类型</span>
+            <select id="provider">
+              <option value="openai">OpenAI-compatible</option>
+              <option value="anthropic">Anthropic-compatible</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="label">模型</span>
+            <input id="model" type="text" placeholder="按 API 类型自动选择默认模型" spellcheck="false" />
+          </label>
+        </div>
+
         <label class="field">
-          <span class="label">模型</span>
-          <input id="model" type="text" placeholder="按 API 类型自动选择默认模型" spellcheck="false" />
+          <span class="label">API Base URL</span>
+          <input id="base_url" type="text" placeholder="按 API 类型自动选择默认地址" spellcheck="false" />
         </label>
-      </div>
+      </section>
 
-      <label class="field">
-        <span class="label">API Base URL</span>
-        <input id="base_url" type="text" placeholder="按 API 类型自动选择默认地址" spellcheck="false" />
-      </label>
+      <section class="settings-group">
+        <div class="group-head">
+          <h2>翻译习惯</h2>
+          <p>默认源语言可自动检测，目标语言决定浮窗里的即时结果。</p>
+        </div>
 
-      <label class="field">
-        <span class="label">唤起快捷键</span>
-        <input id="hotkey" type="text" readonly placeholder="点击后按下组合键…" />
-        <span class="hint-text">点击输入框，然后按下你想要的组合键（需含 ⌘/⌃/⌥ 等修饰键）</span>
-      </label>
+        <div class="row-2">
+          <label class="field">
+            <span class="label">源语言</span>
+            <select id="source_lang"></select>
+          </label>
+          <label class="field">
+            <span class="label">目标语言</span>
+            <select id="target_lang"></select>
+          </label>
+        </div>
 
-      <div class="row-2">
         <label class="field">
-          <span class="label">源语言</span>
-          <select id="source_lang"></select>
+          <span class="label">字体大小：<span id="fs_val">15</span> px</span>
+          <input id="font_size" type="range" min="11" max="28" step="1" />
         </label>
-        <label class="field">
-          <span class="label">目标语言</span>
-          <select id="target_lang"></select>
-        </label>
-      </div>
+      </section>
 
-      <label class="field">
-        <span class="label">字体大小：<span id="fs_val">15</span> px</span>
-        <input id="font_size" type="range" min="11" max="28" step="1" />
-      </label>
+      <section class="settings-group">
+        <div class="group-head">
+          <h2>唤起与交互</h2>
+          <p>快捷键建议保持简单，随手唤起，不打断当前工作流。</p>
+        </div>
+
+        <label class="field">
+          <span class="label">唤起快捷键</span>
+          <input id="hotkey" type="text" readonly placeholder="点击后按下组合键…" />
+          <span class="hint-text">点击输入框，然后按下你想要的组合键，需包含 ⌘、⌃ 或 ⌥ 这类修饰键。</span>
+        </label>
+      </section>
 
       <div class="actions">
         <span id="msg" class="msg"></span>
-        <button id="save" class="primary">保存</button>
+        <button id="save" class="primary" type="button">保存</button>
       </div>
     </div>
   </body>
